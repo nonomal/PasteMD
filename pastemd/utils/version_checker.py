@@ -77,7 +77,8 @@ class VersionChecker:
         try:
             req = urllib.request.Request(
                 self.GITHUB_API_URL,
-                headers={"User-Agent": "PasteMD"}
+                headers={"User-Agent": f"PasteMD/{self.current_version}",
+                         "version": self.current_version}
             )
             
             with urllib.request.urlopen(req, timeout=self.TIMEOUT) as response:
