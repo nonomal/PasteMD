@@ -1,8 +1,9 @@
 """Windows hotkey availability checker."""
 
 import ctypes
-from typing import Optional, Tuple, Dict
+from typing import Dict, Optional, Set, Tuple
 
+from ...i18n import t
 from ...utils.logging import log
 
 user32 = ctypes.windll.user32
@@ -13,6 +14,24 @@ MOD_CONTROL = 0x0002
 MOD_SHIFT = 0x0004
 MOD_WIN = 0x0008
 MOD_NOREPEAT = 0x4000
+
+MODIFIER_KEYS = {"ctrl", "shift", "alt", "cmd", "win"}
+
+SYSTEM_HOTKEY_DESCRIPTIONS = {
+    ('ctrl', 'c'): "hotkey.recorder.system.ctrl_c",
+    ('ctrl', 'v'): "hotkey.recorder.system.ctrl_v",
+    ('ctrl', 'x'): "hotkey.recorder.system.ctrl_x",
+    ('ctrl', 'z'): "hotkey.recorder.system.ctrl_z",
+    ('ctrl', 'y'): "hotkey.recorder.system.ctrl_y",
+    ('ctrl', 'a'): "hotkey.recorder.system.ctrl_a",
+    ('ctrl', 's'): "hotkey.recorder.system.ctrl_s",
+    ('ctrl', 'f'): "hotkey.recorder.system.ctrl_f",
+    ('ctrl', 'p'): "hotkey.recorder.system.ctrl_p",
+    ('ctrl', 'n'): "hotkey.recorder.system.ctrl_n",
+    ('ctrl', 'w'): "hotkey.recorder.system.ctrl_w",
+    ('ctrl', 't'): "hotkey.recorder.system.ctrl_t",
+    ('alt', 'f4'): "hotkey.recorder.system.alt_f4",
+}
 
 # Virtual Key Codes Mapping
 VK_MAP: Dict[str, int] = {
@@ -40,6 +59,62 @@ VK_MAP: Dict[str, int] = {
 
 class HotkeyChecker:
     """Windows Hotkey Availability Checker"""
+
+    @staticmethod
+    def _split_hotkey_keys(hotkey_str: str) -> Set[str]:
+        return {
+            part.strip()
+            for part in hotkey_str.lower().replace("<", "").replace(">", "").split("+")
+            if part.strip()
+        }
+
+    @staticmethod
+    def validate_hotkey_keys(
+        keys: Set[str],
+        *,
+        hotkey_repr: str = "",
+        detailed: bool = False,
+    ) -> Optional[str]:
+        """
+        Validate hotkey keys that have already been parsed into a set.
+        Returns a localized error message if invalid; otherwise None.
+        """
+        has_modifier = bool(keys & MODIFIER_KEYS)
+        has_normal_key = bool(keys - MODIFIER_KEYS)
+
+        if not has_modifier:
+            return t("hotkey.recorder.error.no_modifier")
+
+        if not has_normal_key:
+            return t("hotkey.recorder.error.no_normal_key")
+
+        if keys & MODIFIER_KEYS == {"shift"}:
+            translation_key = "hotkey.recorder.error.shift_only_long" if detailed else "hotkey.recorder.error.shift_only_short"
+            return t(translation_key)
+
+        for combo, desc_key in SYSTEM_HOTKEY_DESCRIPTIONS.items():
+            if keys == set(combo):
+                if detailed:
+                    return t("hotkey.recorder.error.system_reserved_long", combo=t(desc_key))
+                combo_text = hotkey_repr.upper() if hotkey_repr else "+".join(combo).upper()
+                return t("hotkey.recorder.error.system_reserved_short", combo=combo_text)
+
+        return None
+
+    @staticmethod
+    def validate_hotkey_string(hotkey_str: str, *, detailed: bool = False) -> Optional[str]:
+        """
+        Validate a pynput style hotkey string. Returns error text or None.
+        """
+        try:
+            keys = HotkeyChecker._split_hotkey_keys(hotkey_str)
+            return HotkeyChecker.validate_hotkey_keys(
+                keys,
+                hotkey_repr=hotkey_str,
+                detailed=detailed,
+            )
+        except Exception as e:
+            return t("hotkey.recorder.error.invalid_format", error=str(e))
 
     @staticmethod
     def parse_hotkey(hotkey_str: str) -> Optional[Tuple[int, int]]:

@@ -2,10 +2,10 @@
 
 from ...domains.hotkey.manager import HotkeyManager
 from ...domains.hotkey.debounce import DebounceManager
-from ...domains.hotkey.recorder import HotkeyRecorder
 from ...config.defaults import DEFAULT_CONFIG
 from ...core.state import app_state
 from ...utils.logging import log
+from ...utils.win32 import HotkeyChecker
 from ...i18n import t
 
 
@@ -28,7 +28,7 @@ class HotkeyRunner:
         hotkey = app_state.hotkey_str
         
         # 验证热键是否有效
-        error = HotkeyRecorder.validate_hotkey_string(hotkey)
+        error = HotkeyChecker.validate_hotkey_string(hotkey)
         if error:
             log(f"Invalid hotkey '{hotkey}': {error}. Resetting to default.")
             

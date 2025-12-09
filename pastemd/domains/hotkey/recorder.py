@@ -4,24 +4,8 @@ from typing import Optional, Callable, Set
 from pynput import keyboard
 
 from ...utils.logging import log
+from ...utils.win32 import HotkeyChecker
 from ...i18n import t
-
-
-SYSTEM_HOTKEY_DESCRIPTIONS = {
-    ('ctrl', 'c'): "hotkey.recorder.system.ctrl_c",
-    ('ctrl', 'v'): "hotkey.recorder.system.ctrl_v",
-    ('ctrl', 'x'): "hotkey.recorder.system.ctrl_x",
-    ('ctrl', 'z'): "hotkey.recorder.system.ctrl_z",
-    ('ctrl', 'y'): "hotkey.recorder.system.ctrl_y",
-    ('ctrl', 'a'): "hotkey.recorder.system.ctrl_a",
-    ('ctrl', 's'): "hotkey.recorder.system.ctrl_s",
-    ('ctrl', 'f'): "hotkey.recorder.system.ctrl_f",
-    ('ctrl', 'p'): "hotkey.recorder.system.ctrl_p",
-    ('ctrl', 'n'): "hotkey.recorder.system.ctrl_n",
-    ('ctrl', 'w'): "hotkey.recorder.system.ctrl_w",
-    ('ctrl', 't'): "hotkey.recorder.system.ctrl_t",
-    ('alt', 'f4'): "hotkey.recorder.system.alt_f4",
-}
 
 
 class HotkeyRecorder:
@@ -35,47 +19,6 @@ class HotkeyRecorder:
         self.recording_listener: Optional[keyboard.Listener] = None  # 录制专用监听器
         self.on_update_callback: Optional[Callable[[str], None]] = None
         self.on_finish_callback: Optional[Callable[[Optional[str], Optional[str]], None]] = None
-    
-    @staticmethod
-    def validate_hotkey_string(hotkey: str) -> Optional[str]:
-        """
-        静态方法：验证热键字符串是否有效
-        
-        Args:
-            hotkey: 热键字符串，如 "<ctrl>+b" 或 "<ctrl>+<shift>+v"
-        
-        Returns:
-            错误信息，如果验证通过则返回None
-        """
-        try:
-            # 解析热键字符串
-            parts = hotkey.lower().replace("<", "").replace(">", "").split("+")
-            keys = set(parts)
-            
-            modifiers = {'ctrl', 'shift', 'alt', 'cmd'}
-            has_modifier = bool(keys & modifiers)
-            has_normal_key = bool(keys - modifiers)
-            
-            # 检查是否有修饰键
-            if not has_modifier:
-                return t("hotkey.recorder.error.no_modifier")
-            
-            # 检查是否有普通键
-            if not has_normal_key:
-                return t("hotkey.recorder.error.no_normal_key")
-            
-            # 检查是否仅使用 Shift 作为修饰键
-            if keys & modifiers == {'shift'}:
-                return t("hotkey.recorder.error.shift_only_short")
-            
-            # 检查是否使用了系统级快捷键
-            for system_combo in SYSTEM_HOTKEY_DESCRIPTIONS:
-                if keys == set(system_combo):
-                    return t("hotkey.recorder.error.system_reserved_short", combo=hotkey.upper())
-            
-            return None
-        except Exception as e:
-            return t("hotkey.recorder.error.invalid_format", error=str(e))
     
     def start_recording(
         self,
@@ -262,30 +205,12 @@ class HotkeyRecorder:
         Returns:
             错误信息，如果验证通过则返回None
         """
-        modifiers = {'ctrl', 'shift', 'alt', 'cmd'}
-        has_modifier = bool(self.all_pressed_keys & modifiers)
-        has_normal_key = bool(self.all_pressed_keys - modifiers)
-        
-        # 检查是否有修饰键
-        if not has_modifier:
-            return t("hotkey.recorder.error.no_modifier")
-        
-        # 检查是否有普通键
-        if not has_normal_key:
-            return t("hotkey.recorder.error.no_normal_key")
-        
-        # 检查是否仅使用 Shift 作为修饰键
-        # Shift 单独作为修饰键会与系统输入冲突
-        if self.all_pressed_keys & modifiers == {'shift'}:
-            return t("hotkey.recorder.error.shift_only_long")
-        
-        # 检查是否使用了系统级快捷键
-        # pynput.GlobalHotKeys 无法拦截这些快捷键的系统默认行为
-        for key_combo, desc_key in SYSTEM_HOTKEY_DESCRIPTIONS.items():
-            if set(key_combo) == self.all_pressed_keys:
-                return t("hotkey.recorder.error.system_reserved_long", combo=t(desc_key))
-        
-        return None
+        hotkey_preview = self._format_keys_for_display().replace(" + ", "+")
+        return HotkeyChecker.validate_hotkey_keys(
+            self.all_pressed_keys,
+            hotkey_repr=hotkey_preview,
+            detailed=True,
+        )
     
     def _generate_hotkey_string(self) -> str:
         """生成热键字符串（pynput格式）"""
