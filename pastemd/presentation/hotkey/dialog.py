@@ -5,9 +5,10 @@ from tkinter import ttk, messagebox
 from typing import Optional, Callable
 
 import os
+
+from ...config.paths import get_app_icon_path
 from ...utils.logging import log
 from ...utils.win32 import HotkeyChecker, get_dpi_scale
-from ...utils.resources import resource_path
 from ...domains.hotkey.recorder import HotkeyRecorder
 from ...i18n import t
 from ...core.state import app_state
@@ -39,7 +40,7 @@ class HotkeyDialog:
         
         # 设置图标
         try:
-            icon_path = resource_path("assets/icons/logo.ico")
+            icon_path = get_app_icon_path()
             if os.path.exists(icon_path):
                 self.root.iconbitmap(icon_path)
         except Exception as e:
