@@ -7,7 +7,7 @@ macOS application detection utilities.
 
 说明:
 - Word / Excel：优先用 bundle id 精确识别
-- WPS：mac 端通常是一个统一 App（WPS Office），再用“窗口标题”区分文字/表格
+- WPS：mac 端通常是一个统一 App（WPS Office），再用"窗口标题"区分文字/表格
 """
 
 from __future__ import annotations
@@ -30,37 +30,32 @@ def detect_active_app() -> str:
     Returns:
         "word", "wps", "excel", "wps_excel" 或空字符串
     """
-    app = _get_frontmost_app()
-
-    # 兜底：有时 NSWorkspace 拿到的不是你想要的 frontmost（尤其是某些终端/IDE场景）
-    if not app:
-        app = _get_frontmost_app_via_osascript()
-
+    # 直接使用 osascript，它在热键场景下更准确
+    app = _get_frontmost_app_via_osascript()
+    
     if not app:
         return ""
 
-    bundle_id = (app.get("bundle_id") or "").lower()
     name = (app.get("name") or "").lower()
-    pid = app.get("pid")
 
-    log(f"前台应用: name={app.get('name')}, bundle_id={app.get('bundle_id')}, pid={pid}")
+    log(f"前台应用: name={app.get('name')}")
 
     # ✅ Microsoft Word：name 可能是 "Word" 或 "Microsoft Word"
-    if bundle_id.endswith(".word") or bundle_id == "com.microsoft.word" or name in ("word", "microsoft word"):
+    if name in ("word", "microsoft word"):
         return "word"
 
     # ✅ Microsoft Excel：name 可能是 "Excel" 或 "Microsoft Excel"
-    if bundle_id.endswith(".excel") or bundle_id == "com.microsoft.excel" or name in ("excel", "microsoft excel"):
+    if name in ("excel", "microsoft excel"):
         return "excel"
 
-    # ✅ WPS：bundle id / name 做宽松判断
-    if "kingsoft" in bundle_id or "wps" in name:
-        return detect_wps_type(frontmost_pid=pid)
+    # ✅ WPS：宽松判断
+    if "wps" in name or "kingsoft" in name:
+        return detect_wps_type()
 
     return ""
 
 
-def detect_wps_type(frontmost_pid: int | None = None) -> str:
+def detect_wps_type() -> str:
     """
     检测 WPS 应用的具体类型 (文字/表格)
     macOS 不像 Windows 那样容易通过 COM 精确区分，因此主要依赖窗口标题。
@@ -68,7 +63,7 @@ def detect_wps_type(frontmost_pid: int | None = None) -> str:
     Returns:
         "wps" (文字), "wps_excel" (表格) 或空字符串
     """
-    window_title = _get_frontmost_window_title(frontmost_pid=frontmost_pid)
+    window_title = _get_frontmost_window_title()
     log(f"WPS 窗口标题: {window_title}")
 
     # 如果标题拿不到，就只能保守默认文字
@@ -157,38 +152,48 @@ def _get_frontmost_app_via_osascript() -> dict | None:
         return None
 
 
-def _get_frontmost_window_title(frontmost_pid: int | None = None) -> str:
+def _get_frontmost_window_title() -> str:
     """
-    尝试获取前台窗口标题（同一 pid 可能有多个窗口，这里取最可能的那个）
+    尝试获取前台窗口标题
+    先通过 osascript 获取前台应用的 pid，再查询该进程的窗口
     """
     try:
+        # 先获取前台应用的 pid
+        cmd = [
+            "osascript",
+            "-e",
+            'tell application "System Events" to get unix id of first application process whose frontmost is true'
+        ]
+        pid_str = subprocess.check_output(cmd, text=True).strip()
+        if not pid_str:
+            return ""
+        
+        frontmost_pid = int(pid_str)
+        
         # 获取屏幕上所有窗口的基本信息（不包含桌面元素）
         options = kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements
         win_list = CGWindowListCopyWindowInfo(options, 0) or []
 
-        # 如果给了 pid，就只看这个进程的窗口；否则尽量取 layer=0 且有名字的
+        # 只看前台进程的窗口
         candidates = []
         for w in win_list:
             try:
                 owner_pid = int(w.get("kCGWindowOwnerPID", -1))
                 layer = int(w.get("kCGWindowLayer", 999))
                 title = w.get("kCGWindowName", "") or ""
-                owner_name = w.get("kCGWindowOwnerName", "") or ""
 
                 if layer != 0:
                     continue
-                if frontmost_pid is not None and owner_pid != int(frontmost_pid):
+                if owner_pid != frontmost_pid:
                     continue
 
-                # 有些应用窗口标题为空，但 owner_name 有值；这里优先 title
                 if title.strip():
-                    candidates.append((title, owner_name))
+                    candidates.append(title)
             except Exception:
                 continue
 
         if candidates:
-            # 直接取第一个通常就够用；如遇到多窗口可改成更复杂的排序策略
-            return str(candidates[0][0])
+            return str(candidates[0])
 
         return ""
     except Exception as e:
@@ -198,14 +203,37 @@ def _get_frontmost_window_title(frontmost_pid: int | None = None) -> str:
 
 if __name__ == "__main__":
     import time
+    from pynput import keyboard
 
-    log("开始 macOS 前台应用检测测试（每 3 秒一次，Ctrl+C 退出）")
+    log("macOS 前台应用检测测试 - 按 Cmd+Shift+D 触发检测，按 Ctrl+C 退出")
+    
+    def on_activate():
+        """热键触发时执行检测"""
+        # 添加短暂延迟，避免热键按下时焦点切换的干扰
+        time.sleep(0.1)
+        
+        print(f"\n{'='*60}")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 开始检测")
+        
+        # 使用正常流程检测
+        result = detect_active_app()
+        
+        print(f"检测结果: {result}")
+        print(f"{'='*60}\n")
+    
+    # 设置热键 Cmd+Shift+D
+    hotkey = keyboard.GlobalHotKeys({
+        '<cmd>+<shift>+d': on_activate
+    })
+    
     try:
-        while True:
-            app = _get_frontmost_app() or _get_frontmost_app_via_osascript()
-            print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} frontmost={app}  detect={detect_active_app()}")
-            time.sleep(3)
+        hotkey.start()
+        print("✓ 热键监听已启动")
+        print("✓ 请切换到要检测的应用窗口")
+        print("✓ 按 Cmd+Shift+D 触发检测")
+        print("✓ 按 Ctrl+C 退出\n")
+        hotkey.join()
     except KeyboardInterrupt:
         log("检测测试已手动终止")
-        print("退出检测")
+        print("\n退出检测")
 

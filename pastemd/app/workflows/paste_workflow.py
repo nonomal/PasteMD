@@ -5,7 +5,7 @@ import io
 import os
 from typing import Optional
 
-from ...utils.win32.detector import detect_active_app
+from ...utils.detector import detect_active_app
 from ...utils.clipboard import get_clipboard_text, is_clipboard_empty, is_clipboard_html, get_clipboard_html
 from ...utils.latex import convert_latex_delimiters
 from ...utils.md_normalizer import normalize_markdown
