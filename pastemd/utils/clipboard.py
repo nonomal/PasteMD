@@ -3,11 +3,17 @@
 import os
 import re
 import sys
-import ctypes
-from ctypes import wintypes
-import pyperclip
-import win32clipboard as wc
 import time
+import pyperclip
+
+if sys.platform == "win32":
+    import ctypes
+    from ctypes import wintypes
+    import win32clipboard as wc
+else:
+    ctypes = None
+    wintypes = None
+    wc = None
 from ..core.errors import ClipboardError
 from ..core.state import app_state
 from .html_formatter import clean_html_content
@@ -37,7 +43,7 @@ def _try_read_cf_html(wait_ms: int, interval_ms: int) -> bytes | str | None:
     last_error: Exception | None = None
     while time.monotonic() < deadline:
         try:
-            wc.OpenClipboard()
+            wc.OpenClipboard(None)
         except Exception as exc:
             last_error = exc
             time.sleep(interval_s)
@@ -378,7 +384,7 @@ def is_clipboard_files() -> bool:
         # 某些应用会暂时占用剪贴板，这里做几次轻量重试
         for attempt in range(3):
             try:
-                wc.OpenClipboard()
+                wc.OpenClipboard(None)
                 try:
                     result = bool(wc.IsClipboardFormatAvailable(wc.CF_HDROP))
                     log(f"Clipboard files check: {result}")
@@ -407,7 +413,7 @@ def get_clipboard_files() -> list[str]:
     try:
         for attempt in range(3):
             try:
-                wc.OpenClipboard()
+                wc.OpenClipboard(None)
                 try:
                     if wc.IsClipboardFormatAvailable(wc.CF_HDROP):
                         data = wc.GetClipboardData(wc.CF_HDROP)
