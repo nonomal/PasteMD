@@ -91,12 +91,11 @@ class FallbackWorkflow(BaseWorkflow):
         output_path = generate_output_path(
             keep_file=(action == "save"),
             save_dir=self.config.get("save_dir", ""),
-            md_text=markdown_text,
-            extension=".xlsx"
+            table_data=table_data,
         )
         
         # 执行输出
-        keep_format = self.config.get("keep_format", True)
+        keep_format = self.config.get("excel_keep_format", self.config.get("keep_format", True))
         success = self.output_executor.execute_xlsx(
             action=action,
             table_data=table_data,

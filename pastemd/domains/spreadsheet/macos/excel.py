@@ -1,20 +1,26 @@
 """macOS Excel spreadsheet placer (Optimized)."""
 
+import os
 import subprocess
-import json
 from typing import List
 from ..base import BaseSpreadsheetPlacer
 from ..formatting import CellFormat
 from ....core.types import PlacementResult
 from ....utils.logging import log
 from ....i18n import t
+from ....config.paths import get_user_data_dir
 
 class ExcelPlacer(BaseSpreadsheetPlacer):
     """macOS Excel 内容落地器（批量操作优化版）"""
-    
+
+    def __init__(self):
+        temp_dir = os.path.join(get_user_data_dir(), "temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        self._fixed_script_path = os.path.join(temp_dir, "pastemd_excel_insert.applescript")
+
     def place(self, table_data: List[List[str]], config: dict) -> PlacementResult:
         try:
-            keep_format = config.get("keep_format", True)
+            keep_format = config.get("excel_keep_format", config.get("keep_format", True))
             processed_data = self._process_table_data(table_data, keep_format)
             
             # 使用优化后的 AppleScript 批量插入
@@ -49,11 +55,32 @@ class ExcelPlacer(BaseSpreadsheetPlacer):
                 clean_row.append(text)
                 
                 if keep_format and cf.segments:
-                    seg = cf.segments[0]
-                    if seg.bold or seg.italic or seg.strikethrough:
+                    segments_payload = []
+                    char_index = 1  # AppleScript 字符索引从 1 开始
+                    for seg in cf.segments:
+                        seg_text = seg.text or ""
+                        seg_len = len(seg_text)
+                        if seg_len <= 0:
+                            continue
+                        start = char_index
+                        end = char_index + seg_len - 1
+                        if seg.bold or seg.italic or seg.strikethrough or seg.is_code:
+                            segments_payload.append({
+                                "start": start,
+                                "end": end,
+                                "b": bool(seg.bold),
+                                "i": bool(seg.italic),
+                                "s": bool(seg.strikethrough),
+                                "code": bool(seg.is_code),
+                            })
+                        char_index += seg_len
+
+                    if segments_payload or cf.has_newline or cf.is_code_block:
                         format_info.append({
-                            "r": i + 1, "c": j + 1, # 转为从1开始的索引供AS使用
-                            "b": seg.bold, "i": seg.italic, "s": seg.strikethrough
+                            "r": i + 1,
+                            "c": j + 1,
+                            "wrap": bool(cf.has_newline or cf.is_code_block),
+                            "segments": segments_payload,
                         })
             # 补齐列
             while len(clean_row) < cols_count:
@@ -83,19 +110,48 @@ class ExcelPlacer(BaseSpreadsheetPlacer):
         ]) + "}"
 
         # 构建格式化脚本
-        format_cmds = []
+        format_cmds: list[str] = []
         if keep_format:
             # 默认表头加粗
-            format_cmds.append(f'set bold of font object of (get resize (active cell) row size 1 column size {cols}) to true')
-            # 其他特定单元格格式
+            format_cmds.append("try")
+            format_cmds.append(
+                f'set bold of font object of (get resize startCell row size 1 column size {cols}) to true'
+            )
+            format_cmds.append("end try")
+
             for f in formats:
-                target = f'cell {f["c"]} of row {f["r"]} of targetRange'
-                if f["b"]: format_cmds.append(f'set bold of font object of ({target}) to true')
-                if f["i"]: format_cmds.append(f'set italic of font object of ({target}) to true')
-                if f["s"]: format_cmds.append(f'set strikethrough of font object of ({target}) to true')
+                r = int(f["r"])
+                c = int(f["c"])
+                wrap = bool(f.get("wrap", False))
+                segments = f.get("segments") or []
+
+                format_cmds.append("try")
+                format_cmds.append(f'set theCell to cell (startC + {c - 1}) of row (startR + {r - 1}) of active sheet')
+                if wrap:
+                    format_cmds.append("set wrap text of theCell to true")
+
+                for seg in segments:
+                    start = int(seg["start"])
+                    end = int(seg["end"])
+                    if end < start:
+                        continue
+                    format_cmds.append(f"set theChars to characters {start} thru {end} of theCell")
+                    if seg.get("code"):
+                        # macOS 默认等宽字体（比 Consolas 更常见）
+                        format_cmds.append('set name of font object of theChars to "Menlo"')
+                    if seg.get("b"):
+                        format_cmds.append("set bold of font object of theChars to true")
+                    if seg.get("i"):
+                        format_cmds.append("set italic of font object of theChars to true")
+                    if seg.get("s"):
+                        format_cmds.append("set strikethrough of font object of theChars to true")
+                format_cmds.append("end try")
+
+        format_script = "\n".join(format_cmds)
 
         script = f'''
         tell application "Microsoft Excel"
+            activate
             if (count of workbooks) is 0 then make new workbook
             
             try
@@ -113,7 +169,7 @@ class ExcelPlacer(BaseSpreadsheetPlacer):
             set value of targetRange to {as_data_list}
             
             -- 格式应用
-            {" ".join(format_cmds)}
+            {format_script}
             
             -- 选中结果区域
             select targetRange
@@ -121,11 +177,15 @@ class ExcelPlacer(BaseSpreadsheetPlacer):
         '''
 
         try:
-            subprocess.run(["osascript", "-e", script], check=True, capture_output=True, text=True)
+            with open(self._fixed_script_path, "w", encoding="utf-8") as f:
+                f.write(script)
+            subprocess.run(["osascript", self._fixed_script_path], check=True, capture_output=True, text=True, timeout=30)
             return True
         except subprocess.CalledProcessError as e:
             log(f"AppleScript Error: {e.stderr}")
             raise Exception(f"AppleScript Error: {e.stderr}")
+        except subprocess.TimeoutExpired:
+            raise Exception(t("placer.macos_excel.script_timeout"))
 
     def _escape_as(self, s: str) -> str:
         """转义 AppleScript 字符串中的特殊字符"""

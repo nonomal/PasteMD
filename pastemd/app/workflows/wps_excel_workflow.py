@@ -78,15 +78,14 @@ class WPSExcelWorkflow(BaseWorkflow):
             # 生成 XLSX 字节流
             xlsx_bytes = SpreadsheetGenerator.generate_xlsx_bytes(
                 table_data,
-                keep_format=self.config.get("keep_format", True)
+                keep_format=self.config.get("excel_keep_format", self.config.get("keep_format", True))
             )
             
             # 保存到文件
             output_path = generate_output_path(
                 keep_file=True,
                 save_dir=self.config.get("save_dir", ""),
-                md_text="",
-                extension=".xlsx"
+                table_data=table_data,
             )
             with open(output_path, "wb") as f:
                 f.write(xlsx_bytes)

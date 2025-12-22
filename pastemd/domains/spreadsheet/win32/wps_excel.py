@@ -19,7 +19,7 @@ class WPSExcelPlacer(BaseSpreadsheetPlacer):
     def place(self, table_data: List[List[str]], config: dict) -> PlacementResult:
         """通过 COM 插入表格数据,失败不降级"""
         try:
-            keep_format = config.get("keep_format", True)
+            keep_format = config.get("excel_keep_format", config.get("keep_format", True))
             success = self.com_inserter.insert(table_data, keep_format=keep_format)
             
             if success:

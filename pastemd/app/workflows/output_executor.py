@@ -327,7 +327,11 @@ class OutputExecutor:
     def _xlsx_open(self, table_data: List[List[str]], output_path: str, keep_format: bool) -> bool:
         """生成并打开 XLSX 文件"""
         try:
-            SpreadsheetGenerator.generate_xlsx(table_data, output_path, keep_format)
+            xlsx_bytes = SpreadsheetGenerator.generate_xlsx_bytes(table_data, keep_format)
+            if not xlsx_bytes:
+                raise Exception("Generated XLSX bytes are empty")
+            with open(output_path, "wb") as f:
+                f.write(xlsx_bytes)
             log(f"Successfully generated spreadsheet: {output_path}")
             if AppLauncher.awaken_and_open_spreadsheet(output_path):
                 self.notification_manager.notify(
@@ -355,7 +359,11 @@ class OutputExecutor:
     def _xlsx_save(self, table_data: List[List[str]], output_path: str, keep_format: bool) -> bool:
         """生成 XLSX 文件（仅保存）"""
         try:
-            SpreadsheetGenerator.generate_xlsx(table_data, output_path, keep_format)
+            xlsx_bytes = SpreadsheetGenerator.generate_xlsx_bytes(table_data, keep_format)
+            if not xlsx_bytes:
+                raise Exception("Generated XLSX bytes are empty")
+            with open(output_path, "wb") as f:
+                f.write(xlsx_bytes)
             log(f"Successfully generated spreadsheet: {output_path}")
             self.notification_manager.notify(
                 "PasteMD",
@@ -375,7 +383,11 @@ class OutputExecutor:
     def _xlsx_clipboard(self, table_data: List[List[str]], output_path: str, keep_format: bool) -> bool:
         """生成 XLSX 文件并复制到剪贴板"""
         try:
-            SpreadsheetGenerator.generate_xlsx(table_data, output_path, keep_format)
+            xlsx_bytes = SpreadsheetGenerator.generate_xlsx_bytes(table_data, keep_format)
+            if not xlsx_bytes:
+                raise Exception("Generated XLSX bytes are empty")
+            with open(output_path, "wb") as f:
+                f.write(xlsx_bytes)
             log(f"Successfully generated spreadsheet: {output_path}")
             copy_files_to_clipboard([output_path])
             self.notification_manager.notify(

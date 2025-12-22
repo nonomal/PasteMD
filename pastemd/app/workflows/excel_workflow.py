@@ -78,7 +78,7 @@ class ExcelWorkflow(BaseWorkflow):
             # 生成 XLSX 字节流
             xlsx_bytes = SpreadsheetGenerator.generate_xlsx_bytes(
                 table_data,
-                keep_format=self.config.get("keep_format", True)
+                keep_format=self.config.get("excel_keep_format", self.config.get("keep_format", True))
             )
             
             # 保存到文件
