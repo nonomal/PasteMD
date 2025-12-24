@@ -7,9 +7,9 @@ from ...utils.logging import log
 
 
 class HtmlPreprocessor(BasePreprocessor):
-    """HTML 内容预处理器"""
+    """HTML 内容预处理器（无状态）"""
 
-    def process(self, html: str) -> str:
+    def process(self, html: str, config: dict) -> str:
         """
         预处理 HTML 内容
 
@@ -21,6 +21,7 @@ class HtmlPreprocessor(BasePreprocessor):
 
         Args:
             html: 原始 HTML 内容
+            config: 配置字典
 
         Returns:
             预处理后的 HTML 内容
@@ -29,9 +30,9 @@ class HtmlPreprocessor(BasePreprocessor):
 
         # 使用 html_formatter 进行清理
         soup = BeautifulSoup(html, "html.parser")
-        clean_html_content(soup, self.config)
+        clean_html_content(soup, config)
 
-        if self.config.get("convert_strikethrough", True):
+        if config.get("convert_strikethrough", True):
             convert_strikethrough_to_del(soup)
 
         unwrap_li_paragraphs(soup)

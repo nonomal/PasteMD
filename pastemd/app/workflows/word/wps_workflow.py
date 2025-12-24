@@ -44,13 +44,13 @@ class WPSWorkflow(WordBaseWorkflow):
             config = self.config.copy()
             config["Keep_original_formula"] = True  # 保留公式为 LaTeX 文本
             if content_type == "html":
-                content = self.html_preprocessor.process(content)
+                content = self.html_preprocessor.process(content, config)
                 md_text = self.doc_generator.convert_html_to_markdown_text(
                     content, config
                 )
             else:
                 # markdown
-                md_text = self.markdown_preprocessor.process(content)
+                md_text = self.markdown_preprocessor.process(content, config)
             
             html_text = self.doc_generator.convert_markdown_to_html_text(
                 md_text, config

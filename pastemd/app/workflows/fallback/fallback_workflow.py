@@ -128,7 +128,7 @@ class FallbackWorkflow(BaseWorkflow):
             # Markdown
             content = self._read_markdown_content()
             # 预处理
-            content = self.markdown_preprocessor.process(content)
+            content = self.markdown_preprocessor.process(content, self.config)
             docx_bytes = self.doc_generator.convert_markdown_to_docx_bytes(
                 content, self.config
             )

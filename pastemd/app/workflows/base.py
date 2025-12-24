@@ -19,7 +19,10 @@ class BaseWorkflow(ABC):
         # 延迟初始化(避免 Pandoc 开销)
         self._doc_generator = None
         self._sheet_generator = None
-        self._markdown_preprocessor = None
+        
+        # 无状态预处理器（可复用）
+        self._markdown_preprocessor = MarkdownPreprocessor()
+        self._html_preprocessor = HtmlPreprocessor()
     
     @property
     def config(self):
@@ -42,15 +45,13 @@ class BaseWorkflow(ABC):
     
     @property
     def markdown_preprocessor(self):
-        """每次创建新的 Markdown Preprocessor 以使用最新配置"""
-        # 不缓存，每次使用最新配置
-        return MarkdownPreprocessor(self.config)
+        """获取无状态的 MarkdownPreprocessor"""
+        return self._markdown_preprocessor
     
     @property
     def html_preprocessor(self):
-        """每次创建新的 HTML Preprocessor 以使用最新配置"""
-        # 不缓存，每次使用最新配置
-        return HtmlPreprocessor(self.config)
+        """获取无状态的 HtmlPreprocessor"""
+        return self._html_preprocessor
     
     @abstractmethod
     def execute(self) -> None:

@@ -39,10 +39,10 @@ class WordBaseWorkflow(BaseWorkflow, ABC):
             self._log(f"Clipboard content type: {content_type}")
 
             if content_type == "markdown":
-                content = self.markdown_preprocessor.process(content)
+                content = self.markdown_preprocessor.process(content, self.config)
             elif content_type == "html":
                 # 预处理 HTML，清理 LaTeX 公式块中的 br 标签等
-                content = self.html_preprocessor.process(content)
+                content = self.html_preprocessor.process(content, self.config)
 
             if content_type == "html":
                 docx_bytes = self.doc_generator.convert_html_to_docx_bytes(
